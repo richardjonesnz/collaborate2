@@ -23,7 +23,7 @@
  * @see https://github.com/moodlehq/moodle-mod_collaborate
  * @see https://github.com/justinhunt/moodle-mod_collaborate */
 
-
+use \mod_collaborate\local\debugging;
 require_once('../../config.php');
 require_once(dirname(__FILE__).'/lib.php');
 
@@ -48,6 +48,9 @@ if ($id) {
             $course->id, false, MUST_EXIST);
 }
 
+// Add the module context for the reports tab permission.
+$context = context_module::instance($cm->id);
+
 // Print the page header.
 $PAGE->set_url('/mod/collaborate/view.php', array('id' => $cm->id));
 
@@ -56,6 +59,14 @@ require_login($course, true, $cm);
 $PAGE->set_title(format_string($collaborate->name));
 $PAGE->set_heading(format_string($course->fullname));
 
+// Let's consider the activity "viewed" at this point.
+$completion = new completion_info($course);
+$completion->set_module_viewed($cm);
+debugging::logit('Page: ', $PAGE);
+// Let's add the module viewed event.
+$event = \mod_collaborate\event\page_viewed::create(['context' => $PAGE->context]);
+$event->trigger();
+
 // The renderer performs output to the page.
 $renderer = $PAGE->get_renderer('mod_collaborate');
 
@@ -63,5 +74,16 @@ $renderer = $PAGE->get_renderer('mod_collaborate');
 if (!$collaborate->intro) {
     $collaborate->intro = '';
 }
+// Show reports tab if permission exists and admin has allowed.
+$reportstab = false;
+$config = get_config('mod_collaborate');
+if ($config->enablereports) {
+    if (has_capability('mod/collaborate:viewreportstab', $context)) {
+        $reportstab = true;
+    }
+}
+
+// New parameter to determine status of tabs.
+$renderer->render_view_page_content($collaborate, $cm, $reportstab);
 // Call the renderer method to display the collaborate intro content.
 $renderer->render_view_page_content($collaborate, $cm);
